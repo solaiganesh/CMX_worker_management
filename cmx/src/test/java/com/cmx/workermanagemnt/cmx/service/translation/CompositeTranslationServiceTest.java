@@ -25,7 +25,7 @@ import com.cmx.workermanagemnt.cmx.web.dto.WorkerSkillsDto;
 class CompositeTranslationServiceTest {
 
 	@Mock
-	private GoogleTranslationClient googleTranslationClient;
+	private BatchTranslationClient cloudTranslationClient;
 
 	private PropertyFileDictionary dictionary;
 	private PropertyFileTranslationService propertyFileTranslationService;
@@ -36,11 +36,12 @@ class CompositeTranslationServiceTest {
 		dictionary = new PropertyFileDictionary();
 		dictionary.loadTranslations();
 		propertyFileTranslationService = new PropertyFileTranslationService(dictionary);
-		service = new CompositeTranslationService(propertyFileTranslationService, googleTranslationClient, new TranslationProperties());
+		service = new CompositeTranslationService(propertyFileTranslationService, cloudTranslationClient,
+				new TranslationProperties());
 	}
 
 	@Test
-	void usesPropertyFileForKnownValuesWithoutCallingGoogle() {
+	void usesPropertyFileForKnownValuesWithoutCallingCloud() {
 		WorkerRegistrationRequest request = new WorkerRegistrationRequest();
 		WorkerBasicInfoDto basic = new WorkerBasicInfoDto();
 		basic.setCity("चेन्नई");
@@ -53,11 +54,11 @@ class CompositeTranslationServiceTest {
 
 		assertThat(result.getBasicInfo().getCity()).isEqualTo("Chennai");
 		assertThat(result.getSkills().getPrimarySkill()).isEqualTo("Welding");
-		verify(googleTranslationClient, never()).translateBatch(anyList(), eq("hi"), eq("en"));
+		verify(cloudTranslationClient, never()).translateBatch(anyList(), eq("hi"), eq("en"));
 	}
 
 	@Test
-	void fallsBackToGoogleForUnknownValues() {
+	void fallsBackToCloudForUnknownValues() {
 		WorkerRegistrationRequest request = new WorkerRegistrationRequest();
 		WorkerBasicInfoDto basic = new WorkerBasicInfoDto();
 		basic.setAddress("Unknown street address");
@@ -65,12 +66,12 @@ class CompositeTranslationServiceTest {
 		WorkerSkillsDto skills = new WorkerSkillsDto();
 		request.setSkills(skills);
 
-		when(googleTranslationClient.translateBatch(List.of("Unknown street address"), "hi", "en"))
+		when(cloudTranslationClient.translateBatch(List.of("Unknown street address"), "hi", "en"))
 				.thenReturn(List.of("Unknown street address in English"));
 
 		WorkerRegistrationRequest result = service.toEnglish(request, Locale.forLanguageTag("hi"));
 
 		assertThat(result.getBasicInfo().getAddress()).isEqualTo("Unknown street address in English");
-		verify(googleTranslationClient).translateBatch(List.of("Unknown street address"), "hi", "en");
+		verify(cloudTranslationClient).translateBatch(List.of("Unknown street address"), "hi", "en");
 	}
 }

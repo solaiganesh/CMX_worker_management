@@ -23,16 +23,16 @@ import com.cmx.workermanagemnt.cmx.web.dto.WorkerResponse;
 import com.cmx.workermanagemnt.cmx.web.dto.WorkerSkillsDto;
 
 @ExtendWith(MockitoExtension.class)
-class GoogleCloudTranslationServiceTest {
+class CloudTranslationServiceTest {
 
 	@Mock
-	private GoogleTranslationClient client;
+	private BatchTranslationClient client;
 
-	private GoogleCloudTranslationService service;
+	private CloudTranslationService service;
 
 	@BeforeEach
 	void setUp() {
-		service = new GoogleCloudTranslationService(client, new TranslationProperties());
+		service = new CloudTranslationService(client, new TranslationProperties());
 	}
 
 	@Test

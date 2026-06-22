@@ -30,6 +30,7 @@ public class StorageProperties {
 		private String basicInfoFile = "workers_basic_info.xlsx";
 		private String skillsFile = "workers_skills.xlsx";
 		private String ratingsFile = "workers_ratings.xlsx";
+		private String availabilityFile = "workers_availability.xlsx";
 
 		public String getBasePath() {
 			return basePath;
@@ -61,6 +62,14 @@ public class StorageProperties {
 
 		public void setRatingsFile(String ratingsFile) {
 			this.ratingsFile = ratingsFile;
+		}
+
+		public String getAvailabilityFile() {
+			return availabilityFile;
+		}
+
+		public void setAvailabilityFile(String availabilityFile) {
+			this.availabilityFile = availabilityFile;
 		}
 	}
 }

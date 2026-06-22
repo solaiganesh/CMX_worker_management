@@ -2,13 +2,13 @@ package com.cmx.workermanagemnt.cmx.service.translation;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -21,22 +21,22 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
 @Component
-@ConditionalOnExpression("'${cmx.translation.provider}' == 'google' or ('${cmx.translation.provider}' == 'composite' and '${cmx.translation.cloud-provider:google}' == 'google')")
-public class GoogleTranslationClient implements BatchTranslationClient {
+@ConditionalOnExpression("'${cmx.translation.provider}' == 'azure' or ('${cmx.translation.provider}' == 'composite' and '${cmx.translation.cloud-provider:google}' == 'azure')")
+public class AzureTranslationClient implements BatchTranslationClient {
 
-	private static final Logger log = LoggerFactory.getLogger(GoogleTranslationClient.class);
+	private static final Logger log = LoggerFactory.getLogger(AzureTranslationClient.class);
 
 	private final RestClient restClient;
 	private final TranslationProperties properties;
 	private final Cache<String, String> cache;
 
-	public GoogleTranslationClient(TranslationProperties properties) {
+	public AzureTranslationClient(TranslationProperties properties) {
 		this.properties = properties;
 		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-		requestFactory.setConnectTimeout((int) properties.getGoogle().getTimeout().toMillis());
-		requestFactory.setReadTimeout((int) properties.getGoogle().getTimeout().toMillis());
+		requestFactory.setConnectTimeout((int) properties.getAzure().getTimeout().toMillis());
+		requestFactory.setReadTimeout((int) properties.getAzure().getTimeout().toMillis());
 		this.restClient = RestClient.builder()
-				.baseUrl(properties.getGoogle().getBaseUrl())
+				.baseUrl(properties.getAzure().getBaseUrl())
 				.requestFactory(requestFactory)
 				.build();
 		this.cache = buildCache(properties);
@@ -78,7 +78,7 @@ public class GoogleTranslationClient implements BatchTranslationClient {
 			return results;
 		}
 
-		List<String> translated = callGoogleApi(uncachedTexts, sourceLanguage, targetLanguage);
+		List<String> translated = callAzureApi(uncachedTexts, sourceLanguage, targetLanguage);
 		for (int i = 0; i < uncachedIndexes.size(); i++) {
 			int resultIndex = uncachedIndexes.get(i);
 			String translatedText = translated.get(i);
@@ -89,7 +89,7 @@ public class GoogleTranslationClient implements BatchTranslationClient {
 			}
 		}
 
-		log.debug("Translated {} characters from {} to {} ({} cache misses)",
+		log.debug("Translated {} characters from {} to {} via Azure ({} cache misses)",
 				uncachedTexts.stream().mapToInt(String::length).sum(),
 				sourceLanguage,
 				targetLanguage,
@@ -97,37 +97,52 @@ public class GoogleTranslationClient implements BatchTranslationClient {
 		return results;
 	}
 
-	private List<String> callGoogleApi(List<String> texts, String sourceLanguage, String targetLanguage) {
-		String apiKey = properties.getGoogle().getApiKey();
+	private List<String> callAzureApi(List<String> texts, String sourceLanguage, String targetLanguage) {
+		String apiKey = properties.getAzure().getApiKey();
 		if (!StringUtils.hasText(apiKey)) {
-			throw new TranslationException("Google Translate API key is not configured (cmx.translation.google.api-key)");
+			throw new TranslationException("Azure Translator API key is not configured (cmx.translation.azure.api-key)");
 		}
 
-		Map<String, Object> requestBody = new HashMap<>();
-		requestBody.put("q", texts);
-		requestBody.put("source", sourceLanguage);
-		requestBody.put("target", targetLanguage);
-		requestBody.put("format", "text");
+		List<AzureTranslateRequest> requestBody = texts.stream()
+				.map(AzureTranslateRequest::new)
+				.toList();
 
 		try {
-			GoogleTranslateResponse response = restClient.post()
-					.uri(uriBuilder -> uriBuilder.queryParam("key", apiKey).build())
+			AzureTranslateResponse[] response = restClient.post()
+					.uri(uriBuilder -> uriBuilder
+							.path("/translate")
+							.queryParam("api-version", "3.0")
+							.queryParam("from", sourceLanguage)
+							.queryParam("to", targetLanguage)
+							.build())
+					.header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+					.header("Ocp-Apim-Subscription-Key", apiKey)
+					.headers(headers -> applyRegionHeader(headers))
 					.body(requestBody)
 					.retrieve()
-					.body(GoogleTranslateResponse.class);
+					.body(AzureTranslateResponse[].class);
 
-			if (response == null || response.data() == null || response.data().translations() == null) {
-				throw new TranslationException("Empty response from Google Translate API");
+			if (response == null || response.length != texts.size()) {
+				throw new TranslationException("Azure Translator API returned unexpected number of translations");
 			}
-			if (response.data().translations().size() != texts.size()) {
-				throw new TranslationException("Google Translate API returned unexpected number of translations");
+			List<String> translated = new ArrayList<>(response.length);
+			for (AzureTranslateResponse item : response) {
+				if (item == null || item.translations() == null || item.translations().isEmpty()) {
+					throw new TranslationException("Empty response from Azure Translator API");
+				}
+				translated.add(item.translations().get(0).text());
 			}
-			return response.data().translations().stream()
-					.map(GoogleTranslation::translatedText)
-					.toList();
+			return translated;
 		}
 		catch (RestClientException ex) {
-			throw new TranslationException("Google Translate API call failed", ex);
+			throw new TranslationException("Azure Translator API call failed", ex);
+		}
+	}
+
+	private void applyRegionHeader(HttpHeaders headers) {
+		String region = properties.getAzure().getRegion();
+		if (StringUtils.hasText(region)) {
+			headers.add("Ocp-Apim-Subscription-Region", region);
 		}
 	}
 
@@ -148,12 +163,12 @@ public class GoogleTranslationClient implements BatchTranslationClient {
 		return sourceLanguage + "|" + targetLanguage + "|" + text;
 	}
 
-	private record GoogleTranslateResponse(GoogleTranslateData data) {
+	private record AzureTranslateRequest(String Text) {
 	}
 
-	private record GoogleTranslateData(List<GoogleTranslation> translations) {
+	private record AzureTranslateResponse(List<AzureTranslation> translations) {
 	}
 
-	private record GoogleTranslation(String translatedText) {
+	private record AzureTranslation(String text, String to) {
 	}
 }

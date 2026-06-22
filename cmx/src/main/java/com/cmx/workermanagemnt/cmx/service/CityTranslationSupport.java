@@ -7,19 +7,19 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-import com.cmx.workermanagemnt.cmx.service.translation.GoogleTranslationClient;
+import com.cmx.workermanagemnt.cmx.service.translation.BatchTranslationClient;
 import com.cmx.workermanagemnt.cmx.service.translation.PropertyFileDictionary;
 
 @Component
 public class CityTranslationSupport {
 
 	private final ObjectProvider<PropertyFileDictionary> propertyFileDictionary;
-	private final ObjectProvider<GoogleTranslationClient> googleTranslationClient;
+	private final ObjectProvider<BatchTranslationClient> cloudTranslationClient;
 
 	public CityTranslationSupport(ObjectProvider<PropertyFileDictionary> propertyFileDictionary,
-			ObjectProvider<GoogleTranslationClient> googleTranslationClient) {
+			ObjectProvider<BatchTranslationClient> cloudTranslationClient) {
 		this.propertyFileDictionary = propertyFileDictionary;
-		this.googleTranslationClient = googleTranslationClient;
+		this.cloudTranslationClient = cloudTranslationClient;
 	}
 
 	public String toEnglish(String city, Locale sourceLocale) {
@@ -34,7 +34,7 @@ public class CityTranslationSupport {
 				return fromProperty;
 			}
 		}
-		GoogleTranslationClient client = googleTranslationClient.getIfAvailable();
+		BatchTranslationClient client = cloudTranslationClient.getIfAvailable();
 		if (client != null) {
 			return client.translateBatch(List.of(city), language, "en").get(0);
 		}
@@ -53,7 +53,7 @@ public class CityTranslationSupport {
 				return fromProperty;
 			}
 		}
-		GoogleTranslationClient client = googleTranslationClient.getIfAvailable();
+		BatchTranslationClient client = cloudTranslationClient.getIfAvailable();
 		if (client != null) {
 			return client.translateBatch(List.of(city), "en", language).get(0);
 		}

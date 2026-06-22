@@ -287,6 +287,7 @@ Apply a filter **only when the field is not null**. Omit or send `null` to skip 
 | Field | Type | Example | Applied when |
 |-------|------|---------|--------------|
 | `city` | string | `"Chennai"` | not null — exact match on English canonical city |
+| `skill` | string | `"Welding"` | not null — match primary or secondary skill (English canonical) |
 | `minAge` | integer | `25` | not null — inclusive lower bound on computed age |
 | `maxAge` | integer | `45` | not null — inclusive upper bound on computed age |
 | `minExperience` | decimal | `3` | not null — inclusive lower bound on `experience_years` |
@@ -341,6 +342,7 @@ Each item includes:
   - Join basic info + skills by `id` / `user_id`
   - For each candidate worker, apply **only non-null** filters:
     - `city` → match English city (after optional translation of request `city`)
+    - `skill` → match English primary or secondary skill (after optional translation of request `skill`)
     - `minAge` / `maxAge` → computed from `date_of_birth`
     - `minExperience` / `maxExperience` → from skills
     - `minRating` → from `WorkerRatingRepository.calculateAverageRating`
@@ -392,15 +394,135 @@ Each item includes:
 
 ---
 
+## Phase 8 — Worker Date Availability
+
+Per-date availability stored separately from profile-level `availabilityStatus`. Workers upsert availability by date; search can filter to workers marked available on a specific date.
+
+**Data model — Table 4: Worker Availability (`workers_availability.xlsx`)**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `id` | UUID | auto | Primary key |
+| `worker_id` | UUID | yes | FK → `workers_basic_info.id` |
+| `availability_date` | date (ISO-8601) | yes | Unique per worker (upsert key) |
+| `available` | boolean | yes | `true` = available on that date |
+| `updated_at` | datetime | auto | Last update timestamp |
+
+- [x] Domain POJO: `WorkerAvailability`
+- [x] Repository interface: `WorkerAvailabilityRepository` + Excel implementation
+- [x] Config: `cmx.storage.excel.availability-file=workers_availability.xlsx`
+- [x] Workbook init on startup
+
+**Availability API**
+
+- [x] `PUT /api/v1/workers/{id}/availability` — upsert one or more date entries
+- [x] `GET /api/v1/workers/{id}/availability?from=&to=` — list entries (optional date range)
+- [x] `WorkerAvailabilityService` — validate worker exists; upsert by `worker_id` + date
+
+**Search integration**
+
+- [x] Add optional `availableDate` to `WorkerSearchRequest` (null = ignore)
+- [x] When set, return only workers with `available=true` for that date (no record = not available)
+
+**Tests**
+
+- [x] `ExcelWorkerAvailabilityRepositoryIntegrationTest` — upsert same date
+- [x] `WorkerAvailabilityIntegrationTest` — search filters by date; update toggles availability
+
+**Documentation**
+
+- [x] README — availability API curl examples
+- [-] Update product-requirements.md / architecture.md
+
+**Definition of Done**
+
+1. Worker can set/update availability per date via PUT.
+2. Search with `availableDate` returns only workers available on that date.
+3. `./mvnw verify` green.
+
+---
+
+## Phase 9 — Microsoft Azure Translator (Multi-Cloud i18n)
+
+Add **Microsoft Azure Translator** as an alternative cloud backend alongside Google Cloud Translation. Same `TranslationService` contract and translatable field set as Phase 6 — toggle via configuration with no API changes.
+
+**Goals**
+
+- Support Azure Translator Text API v3 for dynamic translation (100+ languages).
+- Toggle cloud backend: `google` | `azure` via `cmx.translation.provider` and `cmx.translation.cloud-provider`.
+- Keep English as canonical storage format in Excel.
+
+**Prerequisites (Azure — manual, outside repo)**
+
+- [ ] Create Azure resource: **Translator** (or Cognitive Services multi-service)
+- [ ] Copy **Key** and **Region** from Azure portal; store in env / secret manager (never commit)
+- [ ] Confirm billing / free tier (2M characters/month on F0)
+
+**Configuration & provider switching**
+
+- [x] Extend `TranslationProperties` (`cmx.translation.*`):
+  - `provider` — `property-file` (default) | `google` | `azure` | `composite`
+  - `cloud-provider` — `google` (default) | `azure` — used when `provider=composite` to pick fallback cloud API
+  - `azure.api-key` — from `${AZURE_TRANSLATOR_API_KEY}` env var
+  - `azure.region` — from `${AZURE_TRANSLATOR_REGION}` (required for regional keys)
+  - `azure.base-url` — default `https://api.cognitive.microsofttranslator.com`
+  - Reuse shared `cache.*` and `on-failure.*` settings from Phase 6
+- [x] `@ConditionalOnProperty` / `@ConditionalOnExpression` on Azure beans (mirror Google pattern)
+
+**Core implementation**
+
+- [x] `BatchTranslationClient` interface — shared contract for cloud clients
+- [x] `GoogleTranslationClient implements BatchTranslationClient` (refactor)
+- [x] `AzureTranslationClient implements BatchTranslationClient`
+  - REST via Spring `RestClient` — `POST /translate?api-version=3.0&from=&to=`
+  - Headers: `Ocp-Apim-Subscription-Key`, optional `Ocp-Apim-Subscription-Region`
+  - Same Caffeine cache key strategy as Google client
+- [x] `CloudTranslationService` — shared `TranslationService` for both `google` and `azure` providers
+- [x] `CompositeTranslationService` — uses active `BatchTranslationClient` (Google or Azure per `cloud-provider`)
+- [x] `CityTranslationSupport` — cloud fallback via `BatchTranslationClient` (works with either provider)
+
+**Error handling**
+
+- [x] Reuse `TranslationException` → 503 `TRANSLATION_UNAVAILABLE`
+- [x] Missing Azure key → clear error message referencing `cmx.translation.azure.api-key`
+
+**Testing**
+
+- [x] `AzureTranslationClientTest` with MockWebServer (no live key in CI)
+- [x] Refactor `GoogleCloudTranslationServiceTest` → `CloudTranslationServiceTest` (provider-agnostic)
+- [x] Update `CompositeTranslationServiceTest` for cloud-agnostic fallback
+
+**Documentation**
+
+- [x] README — Azure setup, env vars, provider toggle examples
+- [-] Update architecture.md provider table
+
+**Rollout**
+
+1. Default remains `property-file` (zero regression).
+2. Staging: `cmx.translation.provider=azure` with Azure key + region.
+3. Hybrid: `cmx.translation.provider=composite` + `cmx.translation.cloud-provider=azure`.
+4. Production: choose `google` or `azure` based on org cloud preference / cost.
+
+**Definition of Done**
+
+1. `provider=azure` translates register/read flows via Azure API.
+2. `provider=composite` + `cloud-provider=azure` uses property file first, Azure fallback.
+3. `./mvnw verify` green.
+
+---
+
 ## Post-MVP Backlog
 
 - [-] `PUT /api/v1/workers/{id}` — update basic info and/or skills
 - [-] Worker search & ratings — implemented in **Phase 7**
+- [-] Worker date availability — implemented in **Phase 8**
 - [-] `GET /api/v1/workers` — list all with pagination (superseded by Phase 7 search)
 - [-] SQL repository implementation (JPA + PostgreSQL)
 - [-] Excel → SQL migration utility
 - [-] Spring Security / JWT authentication
-- [-] Google Cloud Translation — implemented in **Phase 6** (enable via `cmx.translation.provider`)
+- [-] Google Cloud Translation — implemented in **Phase 6** (enable via `cmx.translation.provider=google`)
+- [-] Microsoft Azure Translator — implemented in **Phase 9** (enable via `cmx.translation.provider=azure`)
 - [-] File upload for profile photo and portfolio (S3/local storage)
 - [-] File locking or migration to SQL before multi-instance deployment
 

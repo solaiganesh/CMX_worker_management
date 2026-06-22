@@ -13,12 +13,12 @@ import com.cmx.workermanagemnt.cmx.service.TranslationService;
 import com.cmx.workermanagemnt.cmx.web.dto.WorkerRegistrationRequest;
 import com.cmx.workermanagemnt.cmx.web.dto.WorkerResponse;
 
-public class GoogleCloudTranslationService implements TranslationService {
+public class CloudTranslationService implements TranslationService {
 
-	private final GoogleTranslationClient client;
+	private final BatchTranslationClient client;
 	private final TranslationProperties properties;
 
-	public GoogleCloudTranslationService(GoogleTranslationClient client, TranslationProperties properties) {
+	public CloudTranslationService(BatchTranslationClient client, TranslationProperties properties) {
 		this.client = client;
 		this.properties = properties;
 	}

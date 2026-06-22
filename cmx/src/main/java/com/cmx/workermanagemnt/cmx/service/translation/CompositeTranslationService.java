@@ -20,13 +20,13 @@ import com.cmx.workermanagemnt.cmx.web.dto.WorkerSkillsDto;
 public class CompositeTranslationService implements TranslationService {
 
 	private final PropertyFileTranslationService propertyFileTranslationService;
-	private final GoogleTranslationClient googleTranslationClient;
+	private final BatchTranslationClient cloudTranslationClient;
 	private final TranslationProperties properties;
 
 	public CompositeTranslationService(PropertyFileTranslationService propertyFileTranslationService,
-			GoogleTranslationClient googleTranslationClient, TranslationProperties properties) {
+			BatchTranslationClient cloudTranslationClient, TranslationProperties properties) {
 		this.propertyFileTranslationService = propertyFileTranslationService;
-		this.googleTranslationClient = googleTranslationClient;
+		this.cloudTranslationClient = cloudTranslationClient;
 		this.properties = properties;
 	}
 
@@ -85,11 +85,11 @@ public class CompositeTranslationService implements TranslationService {
 	}
 
 	private void flushBatch(TranslationBatch batch, String sourceLanguage, String targetLanguage, boolean failOnError) {
-		if (batch.googleTexts.isEmpty()) {
+		if (batch.cloudTexts.isEmpty()) {
 			return;
 		}
 		try {
-			List<String> translated = googleTranslationClient.translateBatch(batch.googleTexts, sourceLanguage, targetLanguage);
+			List<String> translated = cloudTranslationClient.translateBatch(batch.cloudTexts, sourceLanguage, targetLanguage);
 			for (int i = 0; i < batch.appliers.size(); i++) {
 				batch.appliers.get(i).accept(translated.get(i));
 			}
@@ -103,7 +103,7 @@ public class CompositeTranslationService implements TranslationService {
 
 	private static final class TranslationBatch {
 
-		private final List<String> googleTexts = new ArrayList<>();
+		private final List<String> cloudTexts = new ArrayList<>();
 		private final List<Consumer<String>> appliers = new ArrayList<>();
 
 		private void addToEnglish(String value, String language, Consumer<String> setter,
@@ -115,7 +115,7 @@ public class CompositeTranslationService implements TranslationService {
 				setter.accept(propertyFile.toEnglishValue(value, language));
 				return;
 			}
-			googleTexts.add(value);
+			cloudTexts.add(value);
 			appliers.add(setter);
 		}
 
@@ -128,7 +128,7 @@ public class CompositeTranslationService implements TranslationService {
 				setter.accept(propertyFile.fromEnglishValue(value, language));
 				return;
 			}
-			googleTexts.add(value);
+			cloudTexts.add(value);
 			appliers.add(setter);
 		}
 
@@ -149,7 +149,7 @@ public class CompositeTranslationService implements TranslationService {
 				}
 				int resolvedIndex = resolved.size();
 				resolved.add(null);
-				googleTexts.add(value);
+				cloudTexts.add(value);
 				appliers.add(translated -> resolved.set(resolvedIndex, translated));
 			}
 			setter.accept(resolved);
@@ -172,7 +172,7 @@ public class CompositeTranslationService implements TranslationService {
 				}
 				int resolvedIndex = resolved.size();
 				resolved.add(null);
-				googleTexts.add(value);
+				cloudTexts.add(value);
 				appliers.add(translated -> resolved.set(resolvedIndex, translated));
 			}
 			setter.accept(resolved);

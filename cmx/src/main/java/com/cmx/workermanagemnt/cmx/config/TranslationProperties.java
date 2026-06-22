@@ -8,7 +8,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class TranslationProperties {
 
 	private String provider = "property-file";
+	/**
+	 * Cloud backend used when {@code provider} is {@code composite}: {@code google} (default) or {@code azure}.
+	 */
+	private String cloudProvider = "google";
 	private Google google = new Google();
+	private Azure azure = new Azure();
 	private Cache cache = new Cache();
 	private OnFailure onFailure = new OnFailure();
 
@@ -20,12 +25,28 @@ public class TranslationProperties {
 		this.provider = provider;
 	}
 
+	public String getCloudProvider() {
+		return cloudProvider;
+	}
+
+	public void setCloudProvider(String cloudProvider) {
+		this.cloudProvider = cloudProvider;
+	}
+
 	public Google getGoogle() {
 		return google;
 	}
 
 	public void setGoogle(Google google) {
 		this.google = google;
+	}
+
+	public Azure getAzure() {
+		return azure;
+	}
+
+	public void setAzure(Azure azure) {
+		this.azure = azure;
 	}
 
 	public Cache getCache() {
@@ -65,6 +86,46 @@ public class TranslationProperties {
 
 		public void setProjectId(String projectId) {
 			this.projectId = projectId;
+		}
+
+		public String getBaseUrl() {
+			return baseUrl;
+		}
+
+		public void setBaseUrl(String baseUrl) {
+			this.baseUrl = baseUrl;
+		}
+
+		public Duration getTimeout() {
+			return timeout;
+		}
+
+		public void setTimeout(Duration timeout) {
+			this.timeout = timeout;
+		}
+	}
+
+	public static class Azure {
+
+		private String apiKey = "";
+		private String region = "";
+		private String baseUrl = "https://api.cognitive.microsofttranslator.com";
+		private Duration timeout = Duration.ofSeconds(5);
+
+		public String getApiKey() {
+			return apiKey;
+		}
+
+		public void setApiKey(String apiKey) {
+			this.apiKey = apiKey;
+		}
+
+		public String getRegion() {
+			return region;
+		}
+
+		public void setRegion(String region) {
+			this.region = region;
 		}
 
 		public String getBaseUrl() {

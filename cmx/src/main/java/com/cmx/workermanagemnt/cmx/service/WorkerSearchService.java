@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import com.cmx.workermanagemnt.cmx.domain.WorkerBasicInfo;
 import com.cmx.workermanagemnt.cmx.domain.WorkerSkills;
+import com.cmx.workermanagemnt.cmx.repository.WorkerAvailabilityRepository;
 import com.cmx.workermanagemnt.cmx.repository.WorkerBasicInfoRepository;
 import com.cmx.workermanagemnt.cmx.repository.WorkerRatingRepository;
 import com.cmx.workermanagemnt.cmx.repository.WorkerSkillsRepository;
@@ -26,13 +27,16 @@ public class WorkerSearchService {
 	private final WorkerBasicInfoRepository basicInfoRepository;
 	private final WorkerSkillsRepository skillsRepository;
 	private final WorkerRatingRepository ratingRepository;
+	private final WorkerAvailabilityRepository availabilityRepository;
 	private final CityTranslationSupport cityTranslationSupport;
 
 	public WorkerSearchService(WorkerBasicInfoRepository basicInfoRepository, WorkerSkillsRepository skillsRepository,
-			WorkerRatingRepository ratingRepository, CityTranslationSupport cityTranslationSupport) {
+			WorkerRatingRepository ratingRepository, WorkerAvailabilityRepository availabilityRepository,
+			CityTranslationSupport cityTranslationSupport) {
 		this.basicInfoRepository = basicInfoRepository;
 		this.skillsRepository = skillsRepository;
 		this.ratingRepository = ratingRepository;
+		this.availabilityRepository = availabilityRepository;
 		this.cityTranslationSupport = cityTranslationSupport;
 	}
 
@@ -41,6 +45,10 @@ public class WorkerSearchService {
 		if (searchCity != null) {
 			searchCity = cityTranslationSupport.toEnglish(searchCity, inputLocale);
 		}
+		String searchSkill = request.getSkill();
+		if (searchSkill != null) {
+			searchSkill = cityTranslationSupport.toEnglish(searchSkill, inputLocale);
+		}
 
 		Map<String, WorkerSkills> skillsByUserId = skillsRepository.findAll().stream()
 				.collect(Collectors.toMap(WorkerSkills::getUserId, skills -> skills, (left, right) -> left));
@@ -48,7 +56,7 @@ public class WorkerSearchService {
 		List<WorkerSearchResult> filtered = new ArrayList<>();
 		for (WorkerBasicInfo basicInfo : basicInfoRepository.findAll()) {
 			WorkerSkills skills = skillsByUserId.get(basicInfo.getId());
-			if (!matchesFilters(basicInfo, skills, request, searchCity)) {
+			if (!matchesFilters(basicInfo, skills, request, searchCity, searchSkill)) {
 				continue;
 			}
 			filtered.add(toSearchResult(basicInfo, skills, responseLocale));
@@ -68,8 +76,11 @@ public class WorkerSearchService {
 	}
 
 	private boolean matchesFilters(WorkerBasicInfo basicInfo, WorkerSkills skills, WorkerSearchRequest request,
-			String searchCity) {
+			String searchCity, String searchSkill) {
 		if (searchCity != null && !searchCity.equalsIgnoreCase(basicInfo.getCity())) {
+			return false;
+		}
+		if (searchSkill != null && !matchesSkill(skills, searchSkill)) {
 			return false;
 		}
 		if (request.getMinAge() != null || request.getMaxAge() != null) {
@@ -103,7 +114,22 @@ public class WorkerSearchService {
 				return false;
 			}
 		}
+		if (request.getAvailableDate() != null
+				&& !availabilityRepository.isAvailableOnDate(basicInfo.getId(), request.getAvailableDate())) {
+			return false;
+		}
 		return true;
+	}
+
+	private boolean matchesSkill(WorkerSkills skills, String searchSkill) {
+		if (skills == null) {
+			return false;
+		}
+		if (skills.getPrimarySkill() != null && skills.getPrimarySkill().equalsIgnoreCase(searchSkill)) {
+			return true;
+		}
+		return skills.getSecondarySkills().stream()
+				.anyMatch(secondarySkill -> secondarySkill != null && secondarySkill.equalsIgnoreCase(searchSkill));
 	}
 
 	private WorkerSearchResult toSearchResult(WorkerBasicInfo basicInfo, WorkerSkills skills, Locale responseLocale) {

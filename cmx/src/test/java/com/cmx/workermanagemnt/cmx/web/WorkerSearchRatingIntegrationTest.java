@@ -13,6 +13,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
+
 import com.cmx.workermanagemnt.cmx.config.StorageProperties;
 import com.cmx.workermanagemnt.cmx.repository.excel.ExcelFileSupport;
 
@@ -147,6 +149,82 @@ class WorkerSearchRatingIntegrationTest {
 						.content("{}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.total").value(1));
+	}
+
+	@Test
+	void searchBySkillMatchesPrimaryOrSecondary() throws Exception {
+		registerWorker("Rajesh Kumar", "+919876543210", "rajesh@example.com", "Welding", null);
+		registerWorker("Priya Sharma", "+919876543211", "priya@example.com", "Plumbing", null);
+		registerWorker("Amit Singh", "+919876543212", "amit@example.com", "Painting", List.of("Welding"));
+
+		mockMvc.perform(post("/api/v1/workers/search")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "skill": "Welding"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.total").value(2));
+
+		mockMvc.perform(post("/api/v1/workers/search")
+						.contentType(MediaType.APPLICATION_JSON)
+						.header("Content-Language", "hi")
+						.content("""
+								{
+								  "skill": "वेल्डिंग"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.total").value(2));
+
+		mockMvc.perform(post("/api/v1/workers/search")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "skill": "Plumbing"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.total").value(1))
+				.andExpect(jsonPath("$.items[0].fullName").value("Priya Sharma"));
+	}
+
+	private void registerWorker(String fullName, String mobile, String email, String primarySkill,
+			List<String> secondarySkills) throws Exception {
+		String secondaryJson = secondarySkills == null ? "[]"
+				: secondarySkills.stream().map(skill -> "\"" + skill + "\"").reduce((left, right) -> left + ", " + right)
+						.map(skills -> "[" + skills + "]").orElse("[]");
+		String payload = """
+				{
+				  "basicInfo": {
+				    "fullName": "%s",
+				    "mobileNumber": "%s",
+				    "email": "%s",
+				    "dateOfBirth": "1990-05-15",
+				    "gender": "MALE",
+				    "city": "Chennai",
+				    "state": "Tamil Nadu",
+				    "address": "12 MG Road",
+				    "pincode": "600001",
+				    "primaryLanguage": "hi",
+				    "availabilityStatus": "AVAILABLE"
+				  },
+				  "skills": {
+				    "primarySkill": "%s",
+				    "secondarySkills": %s,
+				    "experienceYears": 5,
+				    "skillLevel": "INTERMEDIATE",
+				    "workType": "FULL_TIME",
+				    "languagesSpoken": ["hi"]
+				  }
+				}
+				""".formatted(fullName, mobile, email, primarySkill, secondaryJson);
+
+		mockMvc.perform(post("/api/v1/workers/register")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(payload))
+				.andExpect(status().isCreated());
 	}
 
 	@Test

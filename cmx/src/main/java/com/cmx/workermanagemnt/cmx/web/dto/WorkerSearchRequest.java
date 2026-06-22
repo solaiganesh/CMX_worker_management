@@ -1,6 +1,7 @@
 package com.cmx.workermanagemnt.cmx.web.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
@@ -9,6 +10,8 @@ import jakarta.validation.constraints.Min;
 public class WorkerSearchRequest {
 
 	private String city;
+
+	private String skill;
 
 	@Min(0)
 	private Integer minAge;
@@ -25,6 +28,8 @@ public class WorkerSearchRequest {
 	@DecimalMin("0.0")
 	private BigDecimal minRating;
 
+	private LocalDate availableDate;
+
 	@Min(0)
 	private Integer page;
 
@@ -38,6 +43,14 @@ public class WorkerSearchRequest {
 
 	public void setCity(String city) {
 		this.city = city;
+	}
+
+	public String getSkill() {
+		return skill;
+	}
+
+	public void setSkill(String skill) {
+		this.skill = skill;
 	}
 
 	public Integer getMinAge() {
@@ -78,6 +91,14 @@ public class WorkerSearchRequest {
 
 	public void setMinRating(BigDecimal minRating) {
 		this.minRating = minRating;
+	}
+
+	public LocalDate getAvailableDate() {
+		return availableDate;
+	}
+
+	public void setAvailableDate(LocalDate availableDate) {
+		this.availableDate = availableDate;
 	}
 
 	public Integer getPage() {

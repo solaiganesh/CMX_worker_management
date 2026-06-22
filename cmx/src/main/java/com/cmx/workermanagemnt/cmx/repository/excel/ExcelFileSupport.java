@@ -51,10 +51,15 @@ public class ExcelFileSupport {
 		return Path.of(storageProperties.getExcel().getBasePath(), storageProperties.getExcel().getRatingsFile());
 	}
 
+	public Path getAvailabilityPath() {
+		return Path.of(storageProperties.getExcel().getBasePath(), storageProperties.getExcel().getAvailabilityFile());
+	}
+
 	public void initializeWorkbooks() {
 		initializeWorkbook(getBasicInfoPath(), WorkerBasicInfoHeaders.HEADERS);
 		initializeWorkbook(getSkillsPath(), WorkerSkillsHeaders.HEADERS);
 		initializeWorkbook(getRatingsPath(), WorkerRatingHeaders.HEADERS);
+		initializeWorkbook(getAvailabilityPath(), WorkerAvailabilityHeaders.HEADERS);
 	}
 
 	public synchronized void withWorkbook(Path path, WorkbookCallback callback) {
@@ -232,6 +237,14 @@ public class ExcelFileSupport {
 				"id", "worker_id", "score", "reviewer_name", "comment", "created_at"));
 
 		private WorkerRatingHeaders() {
+		}
+	}
+
+	static final class WorkerAvailabilityHeaders {
+		static final List<String> HEADERS = Collections.unmodifiableList(List.of(
+				"id", "worker_id", "availability_date", "available", "updated_at"));
+
+		private WorkerAvailabilityHeaders() {
 		}
 	}
 }
