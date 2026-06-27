@@ -1,0 +1,44 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:$COMMIT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:latest
+      - ./cmx
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - --all-tags
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:$COMMIT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8080
+      - --memory=1Gi
+      - --cpu=1
+      - --timeout=60
+      - --execution-environment=gen2
+      - --add-volume=name=cmx-data,type=cloud-storage,bucket=${_BUCKET}
+      - --add-volume-mount=volume=cmx-data,mount-path=/app/data
+      - --set-env-vars=PORT=8080,CMX_STORAGE_EXCEL_BASE_PATH=/app/data,CMX_TRANSLATION_PROVIDER=property-file
+
+substitutions:
+  _REGION: asia-south1
+  _REPO: cmx-repo
+  _IMAGE: cmx-worker-management
+  _SERVICE: cmx-worker-management
+  _BUCKET: ${PROJECT_ID}-cmx-data
+
+options:
+  logging: CLOUD_LOGGING_ONLY

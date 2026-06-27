@@ -27,11 +27,12 @@ USER cmx
 
 EXPOSE 8080
 
-ENV SERVER_PORT=8080 \
+ENV PORT=8080 \
+	SERVER_PORT=8080 \
 	CMX_STORAGE_EXCEL_BASE_PATH=/app/data \
 	JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-	CMD curl -f http://localhost:8080/api/v1/health || exit 1
+	CMD curl -f http://localhost:${PORT:-8080}/api/v1/health || exit 1
 
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

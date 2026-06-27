@@ -5,7 +5,7 @@ import java.util.Optional;
 
 import com.cmx.workermanagemnt.cmx.domain.WorkerBasicInfo;
 
-public interface WorkerBasicInfoRepository {
+public interface  WorkerBasicInfoRepository {
 
 	WorkerBasicInfo save(WorkerBasicInfo info);
 
